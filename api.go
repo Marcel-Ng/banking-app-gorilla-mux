@@ -32,11 +32,13 @@ func WriteJSON(w http.ResponseWriter, status int, v any) error {
 
 type APIServer struct {
 	listenAddr string
+	store      Storage
 }
 
-func NewAPIServer(listenAddr string) *APIServer {
+func NewAPIServer(listenAddr string, store Storage) *APIServer {
 	return &APIServer{
 		listenAddr: listenAddr,
+		store:      store,
 	}
 }
 
@@ -67,18 +69,29 @@ func (s *APIServer) handleAccount(w http.ResponseWriter, r *http.Request) error 
 
 func (s *APIServer) handleGetAccount(w http.ResponseWriter, r *http.Request) error {
 	id := mux.Vars(r)["id"]
+	println(id)
 	account := NewAccount("Chidi", "Ud")
 	return WriteJSON(w, http.StatusAccepted, account)
 }
 
 func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) error {
-	return nil
+	createAccountRequest := new(CreateAccountRequest)
+	if err := json.NewDecoder(r.Body).Decode(createAccountRequest); err != nil {
+		return err
+	}
+
+	account := NewAccount(createAccountRequest.FirstName, createAccountRequest.LastName)
+
+	if err := s.store.CreateAccount(account); err != nil {
+		return err
+	}
+	return WriteJSON(w, http.StatusOK, account)
 }
 
 func (s *APIServer) handleDeleteAccount(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func (s *APIServer) handleTransfer(w http.ResponseWriter, r *http.Request) error {
-	return nil
-}
+// func (s *APIServer) handleTransfer(w http.ResponseWriter, r *http.Request) error {
+// 	return nil
+// }
