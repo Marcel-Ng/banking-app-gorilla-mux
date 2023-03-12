@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	_ "github.com/lib/pq"
-	// "github.com/pelletier/go-toml/query"
 )
 
 type Storage interface {
@@ -14,6 +13,7 @@ type Storage interface {
 	UpdateAccount(*Account) error
 	GetAccounts() ([]*Account, error)
 	GetAccountById(int) (*Account, error)
+	GetAccountByNumber(int) (*Account, error)
 }
 
 type PostgresStore struct {
@@ -73,6 +73,20 @@ func (s *PostgresStore) CreateAccount(acc *Account) error {
 
 	fmt.Printf("%+v\n", resp)
 	return nil
+}
+
+func (s *PostgresStore) GetAccountByNumber(number int) (*Account, error) {
+	rows, err := s.db.Query("select * from account where number = $1", number)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		return scanIntoAccounts(rows)
+	}
+
+	return nil, fmt.Errorf("account %d not found", number)
+
 }
 
 func (s *PostgresStore) UpdateAccount(*Account) error {
