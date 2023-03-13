@@ -33,8 +33,11 @@ func NewAPIServer(listenAddr string, store Storage) *APIServer {
 func (s *APIServer) Run() {
 	router := mux.NewRouter()
 
+	// Note: I want to write my routes like so
+	// [{"/login", function, "POST"}, {"/create", createFunction, "POST"},]
+
 	// we should be able to pass the request method in here also
-	router.HandleFunc("/login", makeHTTPHandleFunc(s.handleLogin))
+	router.HandleFunc("/login", makeHTTPHandleFunc(s.handleLogin)).Methods("POST")
 	router.HandleFunc("/account", makeHTTPHandleFunc(s.handleAccount))
 	router.HandleFunc("/account/{id}", withJWTAuth(makeHTTPHandleFunc(s.handleGetAccountByID), s.store))
 	router.HandleFunc("/transfer", makeHTTPHandleFunc(s.handleTransfer))
@@ -66,27 +69,44 @@ func (s *APIServer) handleAccount(w http.ResponseWriter, r *http.Request) error 
 }
 
 func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
-
-	if r.Method == "POST" {
+	if r.Method != "POST" {
 		// TODO: we shall have a general handler to handle all the not found resouces updates
 		return WriteJSON(w, http.StatusNotFound, ApiError{Error: "Not found"})
 	}
-
 	var req LoginRequest
-
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		return err
 	}
+	acc, err := s.store.GetAccountByNumber(int(req.Number))
+	if err != nil {
+		return err
+	}
+
+	if acc.ValidPassword(req.Password) {
+		return fmt.Errorf("incorrect authentication")
+	}
+
+	token, err := creatJWT(acc)
+	if err != nil {
+		return nil
+	}
+	resp := LoginResponse{
+		Token:  token,
+		Number: acc.Number,
+	}
+	// fmt.Printf("%+v\n", acc)
 
 	// validate the password here
-	return WriteJSON(w, http.StatusOK, req)
+	return WriteJSON(w, http.StatusOK, resp)
 }
 
 func (s *APIServer) handleGetAccount(w http.ResponseWriter, r *http.Request) error {
 	accounts, err := s.store.GetAccounts()
+	// panic("something happened here")
 	if err != nil {
 		return err
 	}
+	// fmt.Println(accounts)
 	return WriteJSON(w, http.StatusOK, accounts)
 }
 

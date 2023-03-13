@@ -12,6 +12,11 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+type LoginResponse struct {
+	Number int64  `json:"number"`
+	Token  string `json:"token"`
+}
+
 type TransferRequest struct {
 	ToAccount int `json:"to_account"`
 	Amount    int `json:"amount"`
@@ -35,6 +40,10 @@ type Account struct {
 	CreatedAt         time.Time `json:"createdAt"`
 }
 
+func (a *Account) ValidPassword(pw string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(a.EncryptedPassword), []byte(pw))
+	return err == nil
+}
 func NewAccount(firstName, lastName, password string) (*Account, error) {
 	encpw, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 
