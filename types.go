@@ -17,6 +17,11 @@ type LoginResponse struct {
 	Token  string `json:"token"`
 }
 
+type CreateAccountResponse struct {
+	Number int64  `json:"number"`
+	Token  string `json:"token"`
+}
+
 type TransferRequest struct {
 	ToAccount int `json:"to_account"`
 	Amount    int `json:"amount"`
@@ -26,8 +31,6 @@ type CreateAccountRequest struct {
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
 	Password  string `json:"password"`
-	// Number    int64  `json:"number"`
-	// Balance   int64  `json:"balance"`
 }
 
 type Account struct {
@@ -40,10 +43,15 @@ type Account struct {
 	CreatedAt         time.Time `json:"createdAt"`
 }
 
+/**
+* First of all why do we have this functions inside this place in the first place
+ */
+
 func (a *Account) ValidPassword(pw string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(a.EncryptedPassword), []byte(pw))
 	return err == nil
 }
+
 func NewAccount(firstName, lastName, password string) (*Account, error) {
 	encpw, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 

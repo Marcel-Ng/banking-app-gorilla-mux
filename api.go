@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	jwt "github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
@@ -37,8 +38,10 @@ func (s *APIServer) Run() {
 	// [{"/login", function, "POST"}, {"/create", createFunction, "POST"},]
 
 	// we should be able to pass the request method in here also
+	// If 404 is for page not found, what is the response status for empty request
 	router.HandleFunc("/login", makeHTTPHandleFunc(s.handleLogin)).Methods("POST")
-	router.HandleFunc("/account", makeHTTPHandleFunc(s.handleAccount))
+	router.HandleFunc("/account", makeHTTPHandleFunc(s.handleGetAccount)).Methods("GET")
+	router.HandleFunc("/account", makeHTTPHandleFunc(s.handleCreateAccount)).Methods("POST")
 	router.HandleFunc("/account/{id}", withJWTAuth(makeHTTPHandleFunc(s.handleGetAccountByID), s.store))
 	router.HandleFunc("/transfer", makeHTTPHandleFunc(s.handleTransfer))
 
@@ -46,43 +49,19 @@ func (s *APIServer) Run() {
 	http.ListenAndServe(s.listenAddr, router)
 }
 
-func makeHTTPHandleFunc(f apiFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if err := f(w, r); err != nil {
-			// Handle error here
-			WriteJSON(w, http.StatusBadRequest, ApiError{Error: err.Error()})
-		}
-	}
-}
-
-func (s *APIServer) handleAccount(w http.ResponseWriter, r *http.Request) error {
-
-	if r.Method == "GET" {
-		return s.handleGetAccount(w, r)
-	}
-	if r.Method == "POST" {
-		return s.handleCreateAccount(w, r)
-	}
-
-	return fmt.Errorf("method not allowed %s", r.Method)
-	// return nil
-}
-
 func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
-	if r.Method != "POST" {
-		// TODO: we shall have a general handler to handle all the not found resouces updates
-		return WriteJSON(w, http.StatusNotFound, ApiError{Error: "Not found"})
-	}
-	var req LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	req := new(LoginRequest)
+	if err := getReqJSON(r, req); err != nil {
 		return err
 	}
+
 	acc, err := s.store.GetAccountByNumber(int(req.Number))
 	if err != nil {
 		return err
 	}
 
 	if acc.ValidPassword(req.Password) {
+		// rewrite this error and its handling to make sense at the server
 		return fmt.Errorf("incorrect authentication")
 	}
 
@@ -94,7 +73,6 @@ func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
 		Token:  token,
 		Number: acc.Number,
 	}
-	// fmt.Printf("%+v\n", acc)
 
 	// validate the password here
 	return WriteJSON(w, http.StatusOK, resp)
@@ -133,7 +111,8 @@ func (s *APIServer) handleGetAccountByID(w http.ResponseWriter, r *http.Request)
 
 func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) error {
 	req := new(CreateAccountRequest)
-	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+
+	if err := getReqJSON(r, req); err != nil {
 		return err
 	}
 
@@ -179,6 +158,35 @@ func WriteJSON(w http.ResponseWriter, status int, v any) error {
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(status)
 	return json.NewEncoder(w).Encode(v)
+}
+
+/**
+* Get the request JSON from the request body
+ */
+func makeHTTPHandleFunc(f apiFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := f(w, r); err != nil {
+			// if the error is not handled by the api call func handle it with the generic which is internal server error
+			handleInternalReqError(w, err)
+		}
+	}
+}
+
+func logInternalError(err error) {
+	// this is the function for logging our errors the way we like
+	time := time.Now()
+	fmt.Printf("%v\n Error occured in the system \n%s", time, err.Error())
+}
+
+func handleInternalReqError(w http.ResponseWriter, err error) error {
+	logInternalError(err)
+	return WriteJSON(w, http.StatusInternalServerError, ApiError{Error: "Internal Server Error"})
+}
+func getReqJSON(r *http.Request, v any) error {
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		return err
+	}
+	return nil
 }
 
 // TODO: we should write this in such a way that will enable us to return this in a http request
